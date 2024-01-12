@@ -38,8 +38,8 @@ class planet:
 # declare planets
 gravitationalConstant = 200
 AllPlanets = [planet(300, '#5555FF', 700, 500, [0, 0], 3, True),
-              planet(30, '#55FF55', 900, 500, [0, 10], 1, False),
-              planet(30, '#FF5577', 300, 500, [0, -7], 1, False)]
+              planet(30, '#55FF55', 900, 500, [0, 20], 1, False),
+              planet(30, '#FF5577', 300, 500, [0, -17], 1, False)]
 while running:
     clock.tick(FPS)
 
@@ -81,8 +81,8 @@ while running:
             # if moving away from the body, negative acceleration
             if otherbody.posX > body.posX:
                 lol = 1
-            otherbody.vel[0] += otherAccelerationX / (FPS / 30)
-            otherbody.vel[1] += otherAccelerationY / (FPS / 30)
+            otherbody.vel[0] += otherAccelerationX / (FPS / 60)
+            otherbody.vel[1] += otherAccelerationY / (FPS / 60)
             print(force, xForce, yForce, "forces, ratio:", ratio)
 
     for body in AllPlanets:
