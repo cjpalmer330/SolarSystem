@@ -10,9 +10,10 @@ pygame.display.set_caption("<Your game>")
 clock = pygame.time.Clock()  ## For syncing the FPS
 pauseBut = pygame.transform.scale_by(pygame.image.load('pause-button-svgrepo-com.svg'), 0.1)
 playBut = pygame.transform.scale_by(pygame.image.load('play-button-svgrepo-com.svg'),0.1)
-pauseState = False
+pauseState, pausePlay = True, playBut
 running = True
-FPS = 240
+simSpeed = 1
+FPSRate, FPS = 240, 0
 mousePos = pygame.mouse.get_pos()
 
 class Slider:
@@ -59,9 +60,9 @@ class planet:
 
     def drawPlanet(self):
 
-        if self.lock is False:
-            self.posX += self.vel[0]
-            self.posY += self.vel[1]
+        if self.lock is False and not pauseState:
+            self.posX += (self.vel[0] * simSpeed)
+            self.posY += (self.vel[1] * simSpeed)
         pygame.draw.circle(screen, self.color, (self.posX, self.posY), self.radius)
         self.trail.append((self.posX, self.posY))
         if self.trail.__len__() > 1.5 * FPS:
@@ -70,8 +71,8 @@ class planet:
             pygame.draw.circle(screen, self.color, trailDot, 2)
 
 # randomized velocities for the two planet system
-randBlueX = round(random.uniform(-2.3, 2.3), 4)
-randBlueY = round(random.uniform(-2.3, 2.3), 4)
+randBlueX = round(random.uniform(-2.0, 2.0), 4)
+randBlueY = round(random.uniform(-2.0, 2.0), 4)
 greenXLowerBound, greenYLowerBound = -2.5, -2.5
 if randBlueX < 0:
     greenXLowerBound = 0
@@ -88,14 +89,14 @@ AllPlanets = [
     # planet(30, '#FF5577', 400, 500, [0, -9], 1, False)
 
     # two body system
-    planet(50, "#5555FF", 500, 500, [randBlueX, randBlueY], 1, False),
-    planet(50, "#55FF55", 600, 600, [randGreenX, randGreenY], 1, False)
+    planet(50, "#5555FF", 500, 500, [-1, 2], 1, False),
+    planet(50, "#55FF55", 600, 600, [1, 1], 1, False)
               ]
 sliderList = [
     # gravitational Constant
     Slider((1800, 100), (150, 20), 0.5, 50, 250),
     # simulation speed
-    Slider((1800, 150), (150, 20), 0.0, 32, 1024),
+    Slider((1800, 150), (150, 20), 0.0, 0.05, 2),
     # trail length
     Slider((1800, 200), (150, 20), 0.5, 15, 500)
 ]
@@ -110,13 +111,8 @@ sliderText = [
 ]
 while running:
     clock.tick(FPS)
+    print(simSpeed)
 
-    for event in pygame.event.get():  # gets all the events which have occured till now and keeps tab of them.
-        ## listening for the the X button at the top
-        if event.type == pygame.QUIT:
-            running = False
-
-    screen.fill('#000000')
 
     # drawing background
     screen.fill('#000000')
@@ -136,14 +132,32 @@ while running:
     #                                  (randX, randY)
     #                                 ], 0)
 
-
-
-    #drawing play/pause button
+    # drawing play/pause button
     if pauseState:
-        pausePlay = pauseBut
-    else:
         pausePlay = playBut
-    screen.blit(pausePlay, (1800, 400))
+        FPS = 0
+    else:
+        pausePlay = pauseBut
+        FPS = FPSRate
+
+    # pause play button
+    pausePlayBut = screen.blit(pausePlay, (1800, 400))
+
+
+    # event checking
+    for event in pygame.event.get():
+        # listening for the X button at the top
+        if event.type == pygame.QUIT:
+            running = False
+        # clicking the pause button
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            print("holding mouse")
+        if event.type == pygame.MOUSEBUTTONUP:
+            if pausePlayBut.collidepoint(pygame.mouse.get_pos()):
+                pauseState = not pauseState
+                print("stopped pressing", pauseState)
+
+
 
     # Displaying all sliders
     for slider in sliderList:
@@ -154,7 +168,8 @@ while running:
 
     # getting slider values
     gravitationalConstant = sliderList[0].getValue()
-    FPS = sliderList[1].getValue()
+    if not pauseState:
+        simSpeed = sliderList[1].getValue()
     trailLength = sliderList[2].getValue()
 
     # slider labels
@@ -169,23 +184,22 @@ while running:
 
     # calculating gravity between planets
     for body in AllPlanets:
-        for otherbody in AllPlanets:
-            if body is otherbody:
+        for otherBody in AllPlanets:
+            if body is otherBody:
                 continue
-            force = gravitationalConstant * body.mass * otherbody.mass / (
-                        ((otherbody.posY - body.posY) ** 2 + (otherbody.posX - body.posX) ** 2) + 1)
+            force = gravitationalConstant * body.mass * otherBody.mass / (
+                    ((otherBody.posY - body.posY) ** 2 + (otherBody.posX - body.posX) ** 2) + 1)
 
             # depending on current velocity push that vector in direction of the other planet by calculated amount
             yDirection, xDirection = 1, 1
-            if otherbody.posY > body.posY:
+            if otherBody.posY > body.posY:
                 yDirection = -1
-            if otherbody.posX > body.posX:
+            if otherBody.posX > body.posX:
                 xDirection = -1
-            if otherbody.posX == body.posX:
+            if otherBody.posX == body.posX:
                 angle = 0
             else:
-                angle = math.atan(abs((otherbody.posY - body.posY)/(otherbody.posX - body.posX)))
-            print(angle, math.pi / 2, angle / (2 * math.pi))
+                angle = math.atan(abs((otherBody.posY - body.posY) / (otherBody.posX - body.posX)))
 
             # x and y ratio of the forces
             ratio = angle / (math.pi / 2)
@@ -193,14 +207,17 @@ while running:
             xForce = force - yForce
 
             # acceleration
-            otherAccelerationX = xForce / otherbody.mass * xDirection
-            otherAccelerationY = yForce / otherbody.mass * yDirection
+            otherAccelerationX = xForce / otherBody.mass * xDirection
+            otherAccelerationY = yForce / otherBody.mass * yDirection
+            otherAccelerationX *= simSpeed
+            otherAccelerationY *= simSpeed
+
             # if moving away from the body, negative acceleration
-            if otherbody.posX > body.posX:
+            if otherBody.posX > body.posX:
                 lol = 1
-            otherbody.vel[0] += otherAccelerationX / (FPS / 60)
-            otherbody.vel[1] += otherAccelerationY / (FPS / 60)
-            print(force, xForce, yForce, "forces, ratio:", ratio)
+            if not pauseState:
+                otherBody.vel[0] += otherAccelerationX / 4
+                otherBody.vel[1] += otherAccelerationY / 4
 
     for body in AllPlanets:
         body.drawPlanet()
