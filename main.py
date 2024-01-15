@@ -6,14 +6,14 @@ import random
 ## initialize pygame and create window
 pygame.init()
 screen = pygame.display.set_mode((1920, 1080))
-pygame.display.set_caption("<Your game>")
+pygame.display.set_caption("Solar System")
 clock = pygame.time.Clock()  ## For syncing the FPS
-pauseBut = pygame.transform.scale_by(pygame.image.load('pause-button-svgrepo-com.svg'), 0.1)
-playBut = pygame.transform.scale_by(pygame.image.load('play-button-svgrepo-com.svg'),0.1)
+pauseBut = pygame.transform.scale_by(pygame.image.load('img/pause-button-svgrepo-com.svg'), 0.1)
+playBut = pygame.transform.scale_by(pygame.image.load('img/play-button-svgrepo-com.svg'), 0.1)
 pauseState, pausePlay = True, playBut
 running = True
 simSpeed = 1
-FPSRate, FPS = 240, 0
+FPSRate, FPS, FPSCaughtUp = 150, 0, False
 mousePos = pygame.mouse.get_pos()
 
 class Slider:
@@ -60,13 +60,19 @@ class planet:
 
     def drawPlanet(self):
 
-        if self.lock is False and not pauseState:
-            self.posX += (self.vel[0] * simSpeed)
-            self.posY += (self.vel[1] * simSpeed)
+        # drawing the planet
+        # adding velocity to the position
+        if not self.lock and not pauseState:
+            self.posX += (self.vel[0])
+            self.posY += (self.vel[1])
         pygame.draw.circle(screen, self.color, (self.posX, self.posY), self.radius)
-        self.trail.append((self.posX, self.posY))
-        if self.trail.__len__() > 1.5 * FPS:
-            del self.trail[0]
+
+        # orbital trail
+        if not pauseState:
+            self.trail.append((self.posX, self.posY))
+            while self.trail.__len__() > trailLength:
+                del self.trail[0]
+        # drawing the trail
         for trailDot in self.trail:
             pygame.draw.circle(screen, self.color, trailDot, 2)
 
@@ -96,9 +102,9 @@ sliderList = [
     # gravitational Constant
     Slider((1800, 100), (150, 20), 0.5, 50, 250),
     # simulation speed
-    Slider((1800, 150), (150, 20), 0.0, 0.05, 2),
+    Slider((1800, 150), (150, 20), 0.5, 0.1, 2),
     # trail length
-    Slider((1800, 200), (150, 20), 0.5, 15, 500)
+    Slider((1800, 200), (150, 20), 0.5, 150, 600)
 ]
 sliderText = [
     "Gravitational Constant",
@@ -111,14 +117,12 @@ sliderText = [
 ]
 while running:
     clock.tick(FPS)
-    print(simSpeed)
 
 
     # drawing background
     screen.fill('#000000')
     randX = random.uniform(0, 1) * 1920
     randY = random.uniform(0, 1) * 1080
-    # print(randX, randY)
     # drawing randomized stars
     # if j < 100:
     #    pygame.draw.polygon(screen, 'white', [(randX, randY),
@@ -150,12 +154,9 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         # clicking the pause button
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            print("holding mouse")
         if event.type == pygame.MOUSEBUTTONUP:
             if pausePlayBut.collidepoint(pygame.mouse.get_pos()):
                 pauseState = not pauseState
-                print("stopped pressing", pauseState)
 
 
 
@@ -168,8 +169,8 @@ while running:
 
     # getting slider values
     gravitationalConstant = sliderList[0].getValue()
-    if not pauseState:
-        simSpeed = sliderList[1].getValue()
+    # modulos 0.05 to make sure clean division into step sizes
+    simSpeed = round(sliderList[1].getValue() / 0.05) * 0.05
     trailLength = sliderList[2].getValue()
 
     # slider labels
@@ -182,47 +183,62 @@ while running:
         i += 1
 
 
+    #step size calc for sim speed
+    currentStep, numOfSteps = 1, 1
+    if simSpeed < 1:
+        currentStep = simSpeed
+        stepSize = simSpeed
+        numOfSteps = 1 / simSpeed
+    elif simSpeed > 1:
+        numOfSteps = simSpeed
+        stepSize = 1/ simSpeed
+        currentStep = stepSize
+
+
     # calculating gravity between planets
     for body in AllPlanets:
         for otherBody in AllPlanets:
             if body is otherBody:
                 continue
-            force = gravitationalConstant * body.mass * otherBody.mass / (
-                    ((otherBody.posY - body.posY) ** 2 + (otherBody.posX - body.posX) ** 2) + 1)
 
-            # depending on current velocity push that vector in direction of the other planet by calculated amount
-            yDirection, xDirection = 1, 1
-            if otherBody.posY > body.posY:
-                yDirection = -1
-            if otherBody.posX > body.posX:
-                xDirection = -1
-            if otherBody.posX == body.posX:
-                angle = 0
-            else:
-                angle = math.atan(abs((otherBody.posY - body.posY) / (otherBody.posX - body.posX)))
+            while currentStep <= numOfSteps:
+                print(currentStep, numOfSteps, simSpeed)
+                force = gravitationalConstant * body.mass * otherBody.mass / (
+                        ((otherBody.posY - body.posY) ** 2 + (otherBody.posX - body.posX) ** 2) + 1)
 
-            # x and y ratio of the forces
-            ratio = angle / (math.pi / 2)
-            yForce = force * ratio
-            xForce = force - yForce
+                # depending on current velocity push that vector in direction of the other planet by calculated amount
+                yDirection, xDirection = 1, 1
+                if otherBody.posY > body.posY:
+                    yDirection = -1
+                if otherBody.posX > body.posX:
+                    xDirection = -1
+                if otherBody.posX == body.posX:
+                    angle = 0
+                else:
+                    angle = math.atan(abs((otherBody.posY - body.posY) / (otherBody.posX - body.posX)))
 
-            # acceleration
-            otherAccelerationX = xForce / otherBody.mass * xDirection
-            otherAccelerationY = yForce / otherBody.mass * yDirection
-            otherAccelerationX *= simSpeed
-            otherAccelerationY *= simSpeed
+                # x and y ratio of the forces
+                ratio = angle / (math.pi / 2)
+                yForce = force * ratio
+                xForce = force - yForce
 
-            # if moving away from the body, negative acceleration
-            if otherBody.posX > body.posX:
-                lol = 1
-            if not pauseState:
-                otherBody.vel[0] += otherAccelerationX / 4
-                otherBody.vel[1] += otherAccelerationY / 4
+                # acceleration
+                otherAccelerationX = xForce / otherBody.mass * xDirection
+                otherAccelerationY = yForce / otherBody.mass * yDirection
 
-    for body in AllPlanets:
+                # if moving away from the body, negative acceleration
+                if otherBody.posX > body.posX:
+                    lol = 1
+                if not pauseState:
+                    otherBody.vel[0] += otherAccelerationX / 4
+                    otherBody.vel[1] += otherAccelerationY / 4
+
+                currentStep += stepSize
+
         body.drawPlanet()
-    # gravity equation
-    # force = bigG * mass
+
+
+
 
     ## Done after drawing everything to the screen
     pygame.display.flip()
